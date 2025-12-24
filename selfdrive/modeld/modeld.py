@@ -31,6 +31,7 @@ from openpilot.selfdrive.modeld.constants import ModelConstants, Plan
 from openpilot.selfdrive.modeld.models.commonmodel_pyx import DrivingModelFrame, CLContext
 from openpilot.selfdrive.modeld.runners.tinygrad_helpers import qcom_tensor_from_opencl_address
 
+from openpilot.sunnypilot.modeld_v2.camera_offset_helper import apply_camera_offset
 from openpilot.sunnypilot.livedelay.helpers import get_lat_delay
 from openpilot.sunnypilot.modeld.modeld_base import ModelStateBase
 
@@ -343,8 +344,16 @@ def main(demo=False):
     if sm.updated["liveCalibration"] and sm.seen['roadCameraState'] and sm.seen['deviceState']:
       device_from_calib_euler = np.array(sm["liveCalibration"].rpyCalib, dtype=np.float32)
       dc = DEVICE_CAMERAS[(str(sm['deviceState'].deviceType), str(sm['roadCameraState'].sensor))]
-      model_transform_main = get_warp_matrix(device_from_calib_euler, dc.ecam.intrinsics if main_wide_camera else dc.fcam.intrinsics, False).astype(np.float32)
-      model_transform_extra = get_warp_matrix(device_from_calib_euler, dc.ecam.intrinsics, True).astype(np.float32)
+      height = sm["liveCalibration"].height[0] if sm['liveCalibration'].height else 1.22
+
+      intrinsics_main = dc.ecam.intrinsics if main_wide_camera else dc.fcam.intrinsics
+      model_transform_main = get_warp_matrix(device_from_calib_euler, intrinsics_main, False).astype(np.float32)
+      model_transform_main = apply_camera_offset(model_transform_main, intrinsics_main, height)
+
+      intrinsics_extra = dc.ecam.intrinsics
+      model_transform_extra = get_warp_matrix(device_from_calib_euler, intrinsics_extra, True).astype(np.float32)
+      model_transform_extra = apply_camera_offset(model_transform_extra, intrinsics_extra, height)
+
       live_calib_seen = True
 
     traffic_convention = np.zeros(2)
